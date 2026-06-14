@@ -1,0 +1,15 @@
+{
+  "extName": { "message": "Gmail ChatGPT Reply Assistant" },
+  "extDescription": { "message": "A semi-automatic Gmail assistant that extracts email threads through printable view or on-page expansion, then helps you draft replies with ChatGPT." },
+  "defaultTitle": { "message": "Gmail ChatGPT Assistant" },
+  "popupTitle": { "message": "Gmail ChatGPT Assistant" },
+  "popupIntro": { "message": "Open a Gmail thread and click the “GPT Mail” button at the bottom right, or use the button below to open the panel." },
+  "popupOpenPanel": { "message": "Open panel in Gmail" },
+  "popupStatusNeedGmail": { "message": "Run this while a Gmail tab is open." },
+  "popupStatusOpened": { "message": "Opened the panel in Gmail." },
+  "popupStatusFailed": { "message": "Could not open the panel. Reload Gmail, then try again." },
+  "popupStep1": { "message": "Open an email thread in Gmail" },
+  "popupStep2": { "message": "Load the thread and pass the prompt to ChatGPT" },
+  "popupStep3": { "message": "Copy ChatGPT’s final reply" },
+  "popupStep4": { "message": "Insert it into Gmail and review the draft" }
+}

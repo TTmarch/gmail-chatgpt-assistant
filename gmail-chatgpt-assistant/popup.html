@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Gmail ChatGPT Assistant</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <main>
+    <h1 data-i18n="popupTitle">Gmail ChatGPT Assistant</h1>
+    <p data-i18n="popupIntro">
+      Open a Gmail thread and click the “GPT Mail” button at the bottom right, or use the button below to open the panel.
+    </p>
+    <button id="open-panel" type="button" data-i18n="popupOpenPanel">Open panel in Gmail</button>
+    <p id="status" aria-live="polite"></p>
+    <hr>
+    <ol>
+      <li data-i18n="popupStep1">Open an email thread in Gmail</li>
+      <li data-i18n="popupStep2">Load the thread and pass the prompt to ChatGPT</li>
+      <li data-i18n="popupStep3">Copy ChatGPT’s final reply</li>
+      <li data-i18n="popupStep4">Insert it into Gmail and review the draft</li>
+    </ol>
+  </main>
+  <script src="popup.js"></script>
+</body>
+</html>

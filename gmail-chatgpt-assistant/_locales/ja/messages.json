@@ -1,0 +1,15 @@
+{
+  "extName": { "message": "Gmail ChatGPT 返信アシスタント" },
+  "extDescription": { "message": "Gmailのメールスレッドを印刷用ビュー/自動展開で取得してChatGPTに渡し、返信案をGmailへ挿入する半自動アシスタントです。" },
+  "defaultTitle": { "message": "Gmail ChatGPT Assistant" },
+  "popupTitle": { "message": "Gmail ChatGPT Assistant" },
+  "popupIntro": { "message": "Gmailのスレッド画面で右下の「GPT Mail」ボタンを押すか、下のボタンからパネルを開いてください。" },
+  "popupOpenPanel": { "message": "Gmail上のパネルを開く" },
+  "popupStatusNeedGmail": { "message": "Gmailのタブを開いた状態で実行してください。" },
+  "popupStatusOpened": { "message": "Gmail上のパネルを開きました。" },
+  "popupStatusFailed": { "message": "パネルを開けませんでした。Gmailを再読み込みしてから再度お試しください。" },
+  "popupStep1": { "message": "Gmailでメールスレッドを開く" },
+  "popupStep2": { "message": "スレッドを読み込み、プロンプトをChatGPTへ渡す" },
+  "popupStep3": { "message": "ChatGPTの最終返信案をコピーする" },
+  "popupStep4": { "message": "Gmailへ挿入して下書きとして確認する" }
+}
