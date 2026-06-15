@@ -76,16 +76,6 @@ The extension uses:
 
 This extension is a local browser extension. It does not include analytics, a remote backend, or bundled credentials. Gmail content is read in the active browser page to generate a prompt. You remain responsible for deciding whether to submit that prompt to ChatGPT and for reviewing the final email before sending.
 
-## Release ZIP Policy
-
-Release ZIP files are not committed to this repository. ZIP packages should be published only as GitHub Release assets.
-
-To create a release ZIP locally:
-
-```sh
-zip -r gmail-chatgpt-assistant-v0.4.0.zip gmail-chatgpt-assistant -x '*.DS_Store'
-```
-
 ## License
 
 This project is licensed under the Creative Commons Attribution-NonCommercial 4.0 International License (CC BY-NC 4.0). See [LICENSE](LICENSE).
