@@ -115,8 +115,15 @@
       maybePartial: ' ただし、画面上に未展開らしき要素がまだ{count}件あります。Gmailを再読み込みして再試行してください。',
       resetDone: '入力欄、追加条件、スレッド、プロンプト、返信案、設定をすべてリセットしました。',
       copyPromptFailed: 'プロンプトの自動コピーに失敗しました。下のプロンプトを手動でコピーしてください。',
-      promptCopiedOpen: 'プロンプトをコピーし、ChatGPTを開きました。ChatGPTへ貼り付けて返信案を作成してください。',
-      promptCopied: 'プロンプトをクリップボードへコピーしました。',
+      promptPreparing: '表示中の最新スレッドからプロンプトを作成しています。',
+      clipboardVerifying: '最新プロンプトをクリップボードへコピーし、内容を確認しています。',
+      promptActionBusy: 'プロンプト処理が進行中です。完了後にもう一度操作してください。',
+      clipboardVerificationFailed: 'クリップボードが最新プロンプトへ更新されたことを確認できませんでした。安全のためChatGPTは開いていません。下のプロンプトを手動でコピーしてください。',
+      chatgptOpenFailed: 'プロンプトのコピーは確認できましたが、ChatGPTを開けませんでした。ChatGPTを手動で開いて貼り付けてください。',
+      threadChanged: '表示中のメールスレッドが変わったため、前のスレッドとプロンプトを破棄しました。',
+      threadChangedDuringLoad: 'スレッド取得中に表示中のメールが切り替わりました。現在のスレッドで再実行してください。',
+      promptCopiedOpen: '最新プロンプトのコピーを確認してからChatGPTを開きました。ChatGPTへ貼り付けて返信案を作成してください。',
+      promptCopied: '最新プロンプトをクリップボードへコピーし、内容を確認しました。',
       promptCopyFailed: 'コピーに失敗しました。プロンプト欄から手動でコピーしてください。',
       clipboardRead: 'クリップボードから返信案を読み込みました。不要な解説が含まれていないか確認してください。',
       draftCopied: '返信案をコピーしました。',
@@ -205,8 +212,15 @@
       maybePartial: ' However, {count} likely collapsed item(s) may still remain. Reload Gmail and try again.',
       resetDone: 'All fields, additional instructions, thread text, prompt, reply text, and settings were reset.',
       copyPromptFailed: 'Could not copy the prompt automatically. Copy it manually from the prompt field below.',
-      promptCopiedOpen: 'Copied the prompt and opened ChatGPT. Paste it into ChatGPT to generate the reply.',
-      promptCopied: 'Copied the prompt to the clipboard.',
+      promptPreparing: 'Building a prompt from the latest version of the currently displayed thread.',
+      clipboardVerifying: 'Copying the latest prompt to the clipboard and verifying its contents.',
+      promptActionBusy: 'A prompt operation is already in progress. Try again after it finishes.',
+      clipboardVerificationFailed: 'Could not verify that the clipboard contains the latest prompt. ChatGPT was not opened for safety. Copy the prompt manually from the field below.',
+      chatgptOpenFailed: 'The prompt copy was verified, but ChatGPT could not be opened. Open ChatGPT manually and paste the prompt.',
+      threadChanged: 'The displayed Gmail thread changed, so the previous thread text and prompt were discarded.',
+      threadChangedDuringLoad: 'The displayed email changed while the thread was being loaded. Run the action again on the current thread.',
+      promptCopiedOpen: 'Verified the latest prompt in the clipboard, then opened ChatGPT. Paste it into ChatGPT to generate the reply.',
+      promptCopied: 'Copied the latest prompt to the clipboard and verified its contents.',
       promptCopyFailed: 'Copy failed. Copy the prompt manually from the prompt field.',
       clipboardRead: 'Loaded the reply from the clipboard. Check that it does not include unnecessary explanation.',
       draftCopied: 'Copied the reply.',
@@ -280,6 +294,11 @@
 
   let settings = { ...DEFAULTS };
   let lastThreadText = '';
+  let lastThreadSourceSignature = '';
+  let threadPreviewManuallyEdited = false;
+  let promptActionInProgress = false;
+  let observedLocationHref = location.href;
+  let navigationCheckTimer = 0;
 
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -970,6 +989,52 @@
     return node?.getAttribute('data-thread-perm-id') || '';
   }
 
+  function getLegacyThreadId() {
+    const node = document.querySelector('[data-legacy-thread-id]');
+    return node?.getAttribute('data-legacy-thread-id') || '';
+  }
+
+  function getCurrentThreadSourceSignature() {
+    return [
+      location.href,
+      getThreadPermId(),
+      getLegacyThreadId(),
+      getSubject()
+    ].join('\n');
+  }
+
+  function invalidateThreadCacheForNavigation(showStatus = true) {
+    lastThreadText = '';
+    lastThreadSourceSignature = '';
+    threadPreviewManuallyEdited = false;
+    setValue('thread-preview', '');
+    setValue('prompt-preview', '');
+
+    const panel = getEl('panel');
+    const replyMode = (getEl('mode')?.value || DEFAULTS.mode) === 'reply';
+    if (showStatus && panel && !panel.hidden && replyMode) {
+      setStatus(t('threadChanged'), 'info');
+    }
+  }
+
+  function checkForGmailNavigation() {
+    if (location.href === observedLocationHref) {
+      return;
+    }
+    observedLocationHref = location.href;
+    invalidateThreadCacheForNavigation(true);
+  }
+
+  function scheduleNavigationCheck() {
+    if (navigationCheckTimer) {
+      return;
+    }
+    navigationCheckTimer = window.setTimeout(() => {
+      navigationCheckTimer = 0;
+      checkForGmailNavigation();
+    }, 100);
+  }
+
   function getPrintableThreadUrls() {
     const urls = [];
     const directPrintUrl = findPrintViewUrl();
@@ -1364,6 +1429,67 @@ ${newMailContext || t('promptNewMailFallback')}
     }
   }
 
+  function normalizeClipboardText(text) {
+    return String(text || '').replace(/\r\n?/g, '\n');
+  }
+
+  async function clipboardMatches(expectedText) {
+    try {
+      const actualText = await navigator.clipboard.readText();
+      return normalizeClipboardText(actualText) === normalizeClipboardText(expectedText);
+    } catch (_error) {
+      return false;
+    }
+  }
+
+  async function copyPromptToClipboardVerified(text) {
+    const delays = [30, 90, 180];
+
+    for (let attempt = 0; attempt < delays.length; attempt += 1) {
+      const copied = await copyToClipboard(text);
+      if (!copied) {
+        continue;
+      }
+
+      await sleep(delays[attempt]);
+      if (await clipboardMatches(text)) {
+        return true;
+      }
+
+      // Retry with the synchronous selection-based copy path as an alternate
+      // implementation before the next read-back check.
+      fallbackCopy(text);
+      await sleep(delays[attempt]);
+      if (await clipboardMatches(text)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  async function openChatGptTab() {
+    try {
+      const response = await chrome.runtime.sendMessage({ type: 'open-chatgpt-tab' });
+      if (response?.ok) {
+        return true;
+      }
+    } catch (_error) {
+      // Fall back to window.open for older/reloaded unpacked versions whose
+      // service worker is not available yet.
+    }
+
+    const openedWindow = window.open(CHATGPT_URL, '_blank');
+    if (openedWindow) {
+      try {
+        openedWindow.opener = null;
+      } catch (_error) {
+        // Ignore cross-origin opener restrictions.
+      }
+    }
+    return Boolean(openedWindow);
+  }
+
   async function readFromClipboard() {
     try {
       return await navigator.clipboard.readText();
@@ -1533,9 +1659,18 @@ ${newMailContext || t('promptNewMailFallback')}
 
 
   async function refreshThreadText() {
+    const sourceHref = location.href;
     setStatus(t('refreshing'), 'info');
     const extraction = await extractThreadTextRobust();
+
+    if (location.href !== sourceHref) {
+      invalidateThreadCacheForNavigation(false);
+      throw new Error(t('threadChangedDuringLoad'));
+    }
+
     lastThreadText = extraction.text;
+    lastThreadSourceSignature = getCurrentThreadSourceSignature();
+    threadPreviewManuallyEdited = false;
     setValue('thread-preview', lastThreadText);
 
     if (extraction.source === 'print') {
@@ -1566,11 +1701,15 @@ ${newMailContext || t('promptNewMailFallback')}
     return lastThreadText;
   }
 
-  async function preparePrompt() {
+  async function preparePrompt({ refreshCurrentThread = false } = {}) {
     const mode = getEl('mode')?.value || DEFAULTS.mode;
     if (mode === 'reply') {
       const previewThreadText = cleanText(getEl('thread-preview')?.value || '');
-      if (!previewThreadText) {
+      const currentSignature = getCurrentThreadSourceSignature();
+      const sourceChanged = !lastThreadSourceSignature || lastThreadSourceSignature !== currentSignature;
+      const shouldRefresh = !previewThreadText || sourceChanged || (refreshCurrentThread && !threadPreviewManuallyEdited);
+
+      if (shouldRefresh) {
         await refreshThreadText();
       } else {
         lastThreadText = previewThreadText;
@@ -1583,6 +1722,8 @@ ${newMailContext || t('promptNewMailFallback')}
 
   async function resetAllFields() {
     lastThreadText = '';
+    lastThreadSourceSignature = '';
+    threadPreviewManuallyEdited = false;
     settings = { ...DEFAULTS };
 
     setValue('mode', DEFAULTS.mode);
@@ -1606,29 +1747,75 @@ ${newMailContext || t('promptNewMailFallback')}
     setStatus(t('resetDone'), 'info');
   }
 
+  function setActionButtonsDisabled(disabled) {
+    document.querySelectorAll(`#${APP}-root button[data-action]`).forEach((button) => {
+      button.disabled = disabled;
+      button.setAttribute('aria-busy', disabled ? 'true' : 'false');
+    });
+  }
+
+  async function runPromptAction(task) {
+    if (promptActionInProgress) {
+      setStatus(t('promptActionBusy'), 'info');
+      return;
+    }
+
+    promptActionInProgress = true;
+    setActionButtonsDisabled(true);
+    try {
+      await task();
+    } finally {
+      promptActionInProgress = false;
+      setActionButtonsDisabled(false);
+    }
+  }
+
+  async function copyPreparedPrompt({ openChatGpt }) {
+    setStatus(t('promptPreparing'), 'info');
+    const sourceHref = location.href;
+    const prompt = await preparePrompt({ refreshCurrentThread: true });
+
+    if ((getEl('mode')?.value || DEFAULTS.mode) === 'reply' && location.href !== sourceHref) {
+      invalidateThreadCacheForNavigation(false);
+      throw new Error(t('threadChangedDuringLoad'));
+    }
+
+    setStatus(t('clipboardVerifying'), 'info');
+    const copiedAndVerified = await copyPromptToClipboardVerified(prompt);
+    if (!copiedAndVerified) {
+      setStatus(t('clipboardVerificationFailed'), 'error');
+      return;
+    }
+
+    if (!openChatGpt) {
+      setStatus(t('promptCopied'), 'success');
+      return;
+    }
+
+    const opened = await openChatGptTab();
+    setStatus(opened ? t('promptCopiedOpen') : t('chatgptOpenFailed'), opened ? 'success' : 'error');
+  }
+
   async function handleAction(action) {
     try {
       if (action === 'load-thread') {
-        await refreshThreadText();
+        await runPromptAction(async () => {
+          await refreshThreadText();
+        });
         return;
       }
 
       if (action === 'copy-prompt-open-chatgpt') {
-        const prompt = await preparePrompt();
-        const copied = await copyToClipboard(prompt);
-        if (!copied) {
-          setStatus(t('copyPromptFailed'), 'error');
-          return;
-        }
-        window.open(CHATGPT_URL, '_blank', 'noopener,noreferrer');
-        setStatus(t('promptCopiedOpen'), 'success');
+        await runPromptAction(async () => {
+          await copyPreparedPrompt({ openChatGpt: true });
+        });
         return;
       }
 
       if (action === 'copy-prompt-only') {
-        const prompt = await preparePrompt();
-        const copied = await copyToClipboard(prompt);
-        setStatus(copied ? t('promptCopied') : t('promptCopyFailed'), copied ? 'success' : 'error');
+        await runPromptAction(async () => {
+          await copyPreparedPrompt({ openChatGpt: false });
+        });
         return;
       }
 
@@ -1806,7 +1993,11 @@ ${newMailContext || t('promptNewMailFallback')}
       if (!(target instanceof Element)) {
         return;
       }
-      const action = target.getAttribute('data-action');
+      const actionButton = target.closest('button[data-action]');
+      if (!actionButton || !root.contains(actionButton) || actionButton.disabled) {
+        return;
+      }
+      const action = actionButton.getAttribute('data-action');
       if (action) {
         handleAction(action);
       }
@@ -1819,6 +2010,9 @@ ${newMailContext || t('promptNewMailFallback')}
 
     getEl('thread-preview')?.addEventListener('input', () => {
       lastThreadText = cleanText(getEl('thread-preview')?.value || '');
+      lastThreadSourceSignature = getCurrentThreadSourceSignature();
+      threadPreviewManuallyEdited = true;
+      setValue('prompt-preview', '');
     });
 
     getEl('mode').addEventListener('change', updateModeVisibility);
@@ -1859,8 +2053,12 @@ ${newMailContext || t('promptNewMailFallback')}
       if (!document.getElementById(`${APP}-root`)) {
         renderUi();
       }
+      scheduleNavigationCheck();
     });
     observer.observe(document.documentElement, { childList: true, subtree: true });
+
+    window.addEventListener('hashchange', checkForGmailNavigation);
+    window.addEventListener('popstate', checkForGmailNavigation);
   }
 
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {

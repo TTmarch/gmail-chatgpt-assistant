@@ -254,3 +254,8 @@
     grid-template-columns: 1fr;
   }
 }
+
+#cgpt-gmail-assistant-root button[data-action]:disabled {
+  cursor: progress;
+  opacity: 0.6;
+}
